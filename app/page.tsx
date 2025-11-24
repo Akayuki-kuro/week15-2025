@@ -200,7 +200,7 @@ export default function Page() {
           --bg: #f6f8fb;
           --card: #ffffff;
           --muted: #6b7280;
-          --accent: #0f62fe;
+          --accent: #ffffffff;
           --danger: #ef4444;
           --glass: rgba(15, 98, 254, 0.06);
         }
@@ -210,7 +210,7 @@ export default function Page() {
           padding: 32px 16px;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
             Arial;
-          color: #0f172a;
+          color: #ff0000ff;
         }
         .container {
           max-width: 880px;
@@ -274,7 +274,7 @@ export default function Page() {
           font-weight: 600;
         }
         .btn.primary {
-          background: linear-gradient(90deg, var(--accent), #0066ff);
+          background: linear-gradient(90deg, var(--accent), #ffffffff);
           color: white;
         }
         .btn.danger {
@@ -337,7 +337,7 @@ export default function Page() {
           padding: 28px;
           text-align: center;
           color: var(--muted);
-          background: linear-gradient(180deg, rgba(11, 15, 26, 0.02), rgba(11, 15, 26, 0.01));
+          background: linear-gradient(180deg, rgba(11, 15, 26, 0.02), rgba(251, 248, 248, 0.01));
           border-radius: 10px;
         }
 
