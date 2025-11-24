@@ -2,169 +2,357 @@
 
 import React, { useEffect, useState } from "react";
 
-type Note = {
-  id: number;
+type Item = {
+  id: string;
   title: string;
-  content?: string | null;
+  description?: string;
   createdAt: string;
 };
 
+const STORAGE_KEY = "simple_crud_items_v1";
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
 export default function Page() {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState<Item[]>([]);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [description, setDescription] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
-  async function fetchNotes() {
-    setLoading(true);
-    const res = await fetch("/api/notes");
-    const data = await res.json();
-    setNotes(data);
-    setLoading(false);
-  }
-
+  // load dari localStorage
   useEffect(() => {
-    fetchNotes();
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed: Item[] = JSON.parse(raw);
+        setItems(parsed);
+      } catch {
+        setItems([]);
+      }
+    }
   }, []);
 
-  async function createNote(e?: React.FormEvent) {
-    if (e) e.preventDefault();
-    if (!title.trim()) return alert("Title required");
-    setSaving(true);
-    const res = await fetch("/api/notes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim(), content: content.trim() || null }),
-    });
-    if (!res.ok) {
-      alert("Create failed");
-      setSaving(false);
-      return;
-    }
+  // simpan ke localStorage saat items berubah
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }, [items]);
+
+  function resetForm() {
     setTitle("");
-    setContent("");
-    await fetchNotes();
-    setSaving(false);
+    setDescription("");
+    setEditingId(null);
   }
 
-  async function startEdit(note: Note) {
-    setEditingId(note.id);
-    setTitle(note.title);
-    setContent(note.content || "");
+  function handleCreateOrUpdate(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const t = title.trim();
+    if (!t) return alert("Judul wajib diisi");
+
+    if (editingId) {
+      setItems((prev) =>
+        prev.map((it) => (it.id === editingId ? { ...it, title: t, description, createdAt: it.createdAt } : it))
+      );
+      resetForm();
+      return;
+    }
+
+    const newItem: Item = {
+      id: uid(),
+      title: t,
+      description: description.trim() || undefined,
+      createdAt: new Date().toISOString(),
+    };
+    setItems((prev) => [newItem, ...prev]);
+    resetForm();
+  }
+
+  function startEdit(id: string) {
+    const it = items.find((x) => x.id === id);
+    if (!it) return;
+    setEditingId(id);
+    setTitle(it.title);
+    setDescription(it.description || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function updateNote(e?: React.FormEvent) {
-    if (e) e.preventDefault();
-    if (!editingId) return;
-    setSaving(true);
-    const res = await fetch(`/api/notes/${editingId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title.trim(), content: content.trim() || null }),
-    });
-    if (!res.ok) {
-      alert("Update failed");
-      setSaving(false);
-      return;
-    }
-    setEditingId(null);
-    setTitle("");
-    setContent("");
-    await fetchNotes();
-    setSaving(false);
+  function handleDelete(id: string) {
+    if (!confirm("Hapus item ini?")) return;
+    setItems((prev) => prev.filter((x) => x.id !== id));
   }
 
-  async function deleteNote(id: number) {
-    if (!confirm("Hapus note ini?")) return;
-    const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
-    if (!res.ok) return alert("Hapus gagal");
-    await fetchNotes();
+  function handleClearAll() {
+    if (!confirm("Hapus semua item?")) return;
+    setItems([]);
   }
+
+  const filtered = items.filter(
+    (it) =>
+      it.title.toLowerCase().includes(query.toLowerCase()) ||
+      (it.description || "").toLowerCase().includes(query.toLowerCase())
+  );
 
   return (
-    <main style={{ maxWidth: 800, margin: "2rem auto", padding: "0 1rem" }}>
-      <h1>Halaman Utama — Notes (CRUD sederhana)</h1>
+    <main className="page-root">
+      <div className="container">
+        <h1 className="title">CRUD Simple — Halaman Utama</h1>
 
-      <form onSubmit={editingId ? updateNote : createNote} style={{ marginBottom: 24 }}>
-        <div style={{ marginBottom: 8 }}>
-          <input
-            placeholder="Judul"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            style={{ width: "100%", padding: 8, fontSize: 16 }}
-          />
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <textarea
-            placeholder="Isi (opsional)"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            style={{ width: "100%", padding: 8, height: 100, fontSize: 14 }}
-          />
-        </div>
-        <div>
-          <button type="submit" disabled={saving} style={{ padding: "8px 12px", marginRight: 8 }}>
-            {editingId ? (saving ? "Menyimpan..." : "Update") : saving ? "Menyimpan..." : "Buat"}
-          </button>
-          {editingId && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditingId(null);
-                setTitle("");
-                setContent("");
-              }}
-              style={{ padding: "8px 12px" }}
-            >
-              Batal
+        <form className="card form" onSubmit={handleCreateOrUpdate}>
+          <div className="row">
+            <label className="label">Judul</label>
+            <input
+              className="input"
+              placeholder="Masukkan judul..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          <div className="row">
+            <label className="label">Deskripsi (opsional)</label>
+            <textarea
+              className="textarea"
+              placeholder="Deskripsi singkat..."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+
+          <div className="actions">
+            <button className="btn primary" type="submit">
+              {editingId ? "Update" : "Buat"}
             </button>
-          )}
-        </div>
-      </form>
-
-      <section>
-        <h2>Daftar Notes</h2>
-        {loading ? (
-          <p>Loading...</p>
-        ) : notes.length === 0 ? (
-          <p>Belum ada note.</p>
-        ) : (
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {notes.map((n) => (
-              <li
-                key={n.id}
-                style={{
-                  border: "1px solid #ddd",
-                  padding: 12,
-                  borderRadius: 6,
-                  marginBottom: 12,
+            {editingId ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  resetForm();
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                Batal
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => {
+                  setTitle("");
+                  setDescription("");
+                }}
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </form>
+
+        <div className="toolbar">
+          <input
+            className="search"
+            placeholder="Cari judul atau deskripsi..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="toolbar-right">
+            <span className="count">Items: {items.length}</span>
+            <button className="btn small" onClick={handleClearAll} disabled={items.length === 0}>
+              Clear All
+            </button>
+          </div>
+        </div>
+
+        <section className="list">
+          {filtered.length === 0 ? (
+            <div className="empty">Tidak ada item{query ? " yang cocok dengan pencarian." : "."}</div>
+          ) : (
+            filtered.map((it) => (
+              <article className="card item" key={it.id}>
+                <div className="item-main">
                   <div>
-                    <strong>{n.title}</strong>
-                    <div style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
-                      {n.content || <em>(no content)</em>}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#888", marginTop: 8 }}>
-                      {new Date(n.createdAt).toLocaleString()}
-                    </div>
+                    <div className="item-title">{it.title}</div>
+                    <div className="item-desc">{it.description || <i>(tidak ada deskripsi)</i>}</div>
                   </div>
-                  <div style={{ marginLeft: 16 }}>
-                    <button onClick={() => startEdit(n)} style={{ marginRight: 8 }}>
-                      Edit
-                    </button>
-                    <button onClick={() => deleteNote(n.id)}>Hapus</button>
+                  <div className="item-meta">
+                    <div className="date">{new Date(it.createdAt).toLocaleString()}</div>
+                    <div className="buttons">
+                      <button className="btn small" onClick={() => startEdit(it.id)}>
+                        Edit
+                      </button>
+                      <button className="btn small danger" onClick={() => handleDelete(it.id)}>
+                        Hapus
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              </article>
+            ))
+          )}
+        </section>
+      </div>
+
+      {/* styling */}
+      <style jsx>{`
+        :root {
+          --bg: #f6f8fb;
+          --card: #ffffff;
+          --muted: #6b7280;
+          --accent: #0f62fe;
+          --danger: #ef4444;
+          --glass: rgba(15, 98, 254, 0.06);
+        }
+        .page-root {
+          min-height: 100vh;
+          background: linear-gradient(180deg, #f3f6ff 0%, var(--bg) 100%);
+          padding: 32px 16px;
+          font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+            Arial;
+          color: #0f172a;
+        }
+        .container {
+          max-width: 880px;
+          margin: 0 auto;
+        }
+        .title {
+          margin: 0 0 18px;
+          font-size: 28px;
+          font-weight: 700;
+        }
+        .card {
+          background: var(--card);
+          border-radius: 12px;
+          box-shadow: 0 6px 18px rgba(11, 15, 26, 0.06);
+          padding: 16px;
+        }
+        .form {
+          margin-bottom: 18px;
+        }
+        .row {
+          margin-bottom: 12px;
+        }
+        .label {
+          display: block;
+          font-size: 13px;
+          color: var(--muted);
+          margin-bottom: 6px;
+        }
+        .input,
+        .textarea,
+        .search {
+          width: 100%;
+          border: 1px solid #e6e9ef;
+          border-radius: 8px;
+          padding: 10px 12px;
+          font-size: 14px;
+          outline: none;
+          background: transparent;
+        }
+        .input:focus,
+        .textarea:focus,
+        .search:focus {
+          box-shadow: 0 0 0 4px var(--glass);
+          border-color: var(--accent);
+        }
+        .textarea {
+          min-height: 88px;
+          resize: vertical;
+        }
+        .actions {
+          display: flex;
+          gap: 10px;
+          margin-top: 6px;
+        }
+        .btn {
+          border: 0;
+          background: #f3f4f6;
+          padding: 8px 12px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 600;
+        }
+        .btn.primary {
+          background: linear-gradient(90deg, var(--accent), #0066ff);
+          color: white;
+        }
+        .btn.danger {
+          background: linear-gradient(90deg, #ffdddd, #ffd6d6);
+          color: var(--danger);
+        }
+        .btn.small {
+          padding: 6px 8px;
+          font-size: 13px;
+          border-radius: 6px;
+        }
+        .toolbar {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          margin-bottom: 14px;
+        }
+        .toolbar-right {
+          margin-left: auto;
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .count {
+          font-size: 13px;
+          color: var(--muted);
+        }
+        .list {
+          display: grid;
+          gap: 12px;
+        }
+        .item {
+          padding: 12px;
+        }
+        .item-main {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+        }
+        .item-title {
+          font-weight: 700;
+          font-size: 16px;
+        }
+        .item-desc {
+          margin-top: 6px;
+          color: var(--muted);
+          font-size: 14px;
+        }
+        .item-meta {
+          text-align: right;
+          min-width: 160px;
+        }
+        .date {
+          font-size: 12px;
+          color: var(--muted);
+          margin-bottom: 8px;
+        }
+        .empty {
+          padding: 28px;
+          text-align: center;
+          color: var(--muted);
+          background: linear-gradient(180deg, rgba(11, 15, 26, 0.02), rgba(11, 15, 26, 0.01));
+          border-radius: 10px;
+        }
+
+        /* responsive */
+        @media (max-width: 640px) {
+          .item-main {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .item-meta {
+            text-align: left;
+            margin-top: 10px;
+          }
+        }
+      `}</style>
     </main>
   );
 }
